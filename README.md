@@ -1,2 +1,2 @@
-# train-tremor-model
-Pipeline to get trained weights for the architecture at (syn10146135)
+# train-*mobile data*-model
+Pipeline to get trained weights from accelerometer and gyroscope data collected from mPower app for walk, tremor in PD
