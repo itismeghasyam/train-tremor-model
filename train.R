@@ -92,7 +92,7 @@ pad_data <- function(sensor_data) {
     simplify2array()
   padded_sensor_data <- standard_sensor_data %>%
     rbind(padding) %>%
-    keras::array_reshape(c(4000, 3))
+    keras::array_reshape(c(1000, 3))
   return(padded_sensor_data)
 }
 
