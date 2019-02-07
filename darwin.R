@@ -287,10 +287,12 @@ participantModifiedData <- function(left.data = NULL, right.data = NULL){
     right_data_mod <- signal_darwin(right.data) %>% 
       meltSensorData()
     
-    flip.tag <- (runif(1, min = 0, max = 1) <= 0.5)
+    # flip.tag <- (runif(1, min = 0, max = 1) <= 0.5)
+    flip.tag <- TRUE # default setting
     # To flip left and right hand records, some people might have 
     # tremor in left and some in right, if that is not the case we 
     if(flip.tag){
+      # default setting
       first_half <- left_data_mod
       second_half <- right_data_mod
     }else{
@@ -352,19 +354,56 @@ test.tbl.meta <- tremor.tbl.meta %>%
   unique()
 
 #######################################
-# TEST-ZONE
+# Generate train data X and Y
 #######################################
-test.rec <- train.tbl.meta[1,]
-left.data <- tryCatch({
-  jsonlite::fromJSON(as.character(test.rec['deviceMotion_tremor_handInLap_left.json.items_filePath'] %>% 
-                                  unlist())) %>% 
-    processRawData()
-},error = function(T){return(NULL)})
+train.data.X <- apply(train.tbl.meta, 1, function(x){
+  left.data <- tryCatch({
+    jsonlite::fromJSON(as.character(x['deviceMotion_tremor_handInLap_left.json.items_filePath'] %>% 
+                                      unlist())) %>% 
+      processRawData()
+  },error = function(T){return(NULL)})
+  
+  right.data <- tryCatch({
+    jsonlite::fromJSON(as.character(x['deviceMotion_tremor_handInLap_right.json.items_filePath'] %>% 
+                                      unlist())) %>% 
+      processRawData()
+  },error = function(T){return(NULL)})
+  
+  participant.data <- participantModifiedData(left.data, right.data)
+  
+  return(participant.data %>% as.data.frame())
+})
 
-right.data <- tryCatch({
-  jsonlite::fromJSON(as.character(test.rec['deviceMotion_tremor_handInLap_right.json.items_filePath'] %>% 
-                                    unlist())) %>% 
-    processRawData()
-},error = function(T){return(NULL)})
+train.data.X <- lapply(train.data.X, function(x){
+  return(x %>% simplify2array())
+}) %>% 
+  simplify2array() %>% 
+  keras::array_reshape(c(dim(.)[3], dim(.)[1], dim(.)[2]))
 
-participant.data <- participantModifiedData(left.data, right.data)
+train.data.Y <- train.tbl.meta %>% 
+  dplyr::left_join(train.hc) %>% 
+  dplyr::select(healthCode, PD)
+train.data.Y <- as.numeric(train.data.Y$PD) - 1  
+# 1 means yes they have PD, 0 means they are a control
+
+#######################################
+# Build the keras model architechture
+#######################################
+# Baseline 1D convolution sequential model
+
+model <- keras::keras_model_sequential() %>% 
+  keras::layer_flatten(input_shape = c(2000,6)) %>% 
+  keras::layer_dense(units = 64, activation = 'relu') %>%
+  keras::layer_dense(units = 64, activation = 'relu') %>% 
+  keras::layer_dense(units = 32, activation = 'relu') %>% 
+  keras::layer_dense(units = 1, activation = 'sigmoid')
+
+model %>% keras::compile(
+  optimizer = 'rmsprop',
+  loss = 'binary_crossentropy',
+  metrics = c('auroc')
+)
+  
+history <- model %>% keras::fit(
+  train.data.X, train.data.Y
+)
