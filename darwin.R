@@ -20,7 +20,7 @@ library(githubr)
 library(dplyr)
 library(tidyverse)
 library(rgl)
-
+library(keras)
 
 ##############
 # Required functions
